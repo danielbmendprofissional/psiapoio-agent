@@ -1,0 +1,26 @@
+[project]
+name = "psiapoio-agent"
+version = "0.1.0"
+description = "Serviço do agente do PsiApoio: responde, classifica risco e atualiza a memória. Sem estado, sem acesso ao banco."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.162.2",
+    "httpx>=0.28.1",
+    "pydantic-settings>=2.16.2",
+    "uvicorn[standard]>=0.54.0",
+]
+
+[build-system]
+requires = ["uv_build>=0.12.8,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+    "pytest-asyncio>=1.4.1.post1",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
