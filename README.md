@@ -16,6 +16,8 @@ uv run pytest               # testes (provedor falso, sem rede)
 |---|---|
 | `GET /health` | liveness |
 | `POST /v1/respond` | recebe contexto + mensagem; classificação de risco e resposta rodam **em paralelo**. `risco: null` = não classificada (nunca tratar como "nenhum"); `resposta: null` = falhou, a API usa a mensagem padrão. Em `risco`, **quem usa a mensagem fixa é a API** (ADR 0002) |
+| `POST /v1/summary` | **Resumo diário** de um dia (anotação, sem interpretação clínica) |
+| `POST /v1/agenda` | **Pauta** da próxima sessão a partir de resumos e temas |
 | `POST /v1/memory/update` | recebe memória + mensagens novas e devolve a memória atualizada (a API chama em segundo plano, depois da resposta) |
 
 ## Provedor de LLM

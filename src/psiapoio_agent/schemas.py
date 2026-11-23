@@ -62,3 +62,32 @@ class MemoryUpdateRequest(BaseModel):
 
 class MemoryUpdateResponse(BaseModel):
     memoria: str
+
+
+class TarefaDia(BaseModel):
+    descricao: str
+    feita: bool = False
+
+
+class SummaryRequest(BaseModel):
+    perfil_agente: str = ""
+    memoria: str = ""
+    dia: str
+    mensagens: list[MensagemHistorico] = []
+    humores: list[int] = []
+    tarefas: list[TarefaDia] = []
+
+
+class TextoResponse(BaseModel):
+    texto: str
+
+
+class AgendaRequest(BaseModel):
+    perfil_agente: str = ""
+    resumos: list[str] = []
+    temas_para_pauta: list[str] = []
+
+
+class AgendaResponse(BaseModel):
+    texto: str
+    itens: list[str]

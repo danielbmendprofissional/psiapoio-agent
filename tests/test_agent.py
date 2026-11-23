@@ -126,3 +126,54 @@ def test_api_com_chave_correta(client):
 
 def test_health_sem_chave(client):
     assert client.get("/health").status_code == 200
+
+
+class FakeD3:
+    def __init__(self, saida):
+        self.saida = saida
+        self.chamadas = []
+
+    async def chat(self, messages, **kw):
+        self.chamadas.append(messages)
+        return self.saida
+
+
+async def test_resumo_do_dia_usa_so_o_que_veio():
+    from psiapoio_agent.schemas import SummaryRequest, TarefaDia, MensagemHistorico
+
+    llm = FakeD3("  O paciente fez a caminhada.  ")
+    out = await agent.resumir_dia(
+        llm,
+        SummaryRequest(
+            dia="2026-11-21",
+            mensagens=[MensagemHistorico(papel="paciente", texto="Caminhei hoje")],
+            humores=[4],
+            tarefas=[TarefaDia(descricao="Caminhada", feita=True)],
+        ),
+    )
+    assert out == "O paciente fez a caminhada."
+    usuario = llm.chamadas[0][1]["content"]
+    assert "Caminhei hoje" in usuario and "Caminhada: feita" in usuario and "4" in usuario
+
+
+async def test_pauta_limita_a_seis_itens_e_aceita_cerca():
+    from psiapoio_agent.schemas import AgendaRequest
+
+    itens = [f"assunto {i}" for i in range(9)]
+    llm = FakeD3("```json\n" + json.dumps({"texto": "Para a sessão", "itens": itens}) + "\n```")
+    out = await agent.montar_pauta(llm, AgendaRequest(resumos=["r1"], temas_para_pauta=["t1"]))
+    assert len(out.itens) == 6 and out.texto == "Para a sessão"
+
+
+async def test_pauta_com_json_invalido_falha_com_agent_error():
+    from psiapoio_agent.schemas import AgendaRequest
+
+    with pytest.raises(agent.AgentError):
+        await agent.montar_pauta(FakeD3("sem json"), AgendaRequest(resumos=["r"]))
+
+
+def test_endpoints_d3_exigem_chave_e_respondem(client):
+    h = {"X-Api-Key": "segredo"}
+    assert client.post("/v1/summary", json={"dia": "2026-11-21"}).status_code == 401
+    assert client.post("/v1/agenda", json={}).status_code == 401
+    assert client.post("/v1/summary", json={"dia": "2026-11-21"}, headers=h).status_code == 200

@@ -7,6 +7,10 @@ from fastapi import Depends, FastAPI, Header, HTTPException
 from . import agent
 from .provider import LLMError, LLMProvider, OpenAICompatProvider
 from .schemas import (
+    AgendaRequest,
+    AgendaResponse,
+    SummaryRequest,
+    TextoResponse,
     MemoryUpdateRequest,
     MemoryUpdateResponse,
     RespondRequest,
@@ -72,4 +76,20 @@ async def memory_update(
     try:
         return MemoryUpdateResponse(memoria=await agent.atualizar_memoria(llm, req))
     except LLMError as exc:
+        raise HTTPException(status_code=502, detail="falha no modelo") from exc
+
+
+@app.post("/v1/summary", response_model=TextoResponse, dependencies=[Depends(exigir_chave)])
+async def summary(req: SummaryRequest, llm: LLMProvider = Depends(get_llm)) -> TextoResponse:
+    try:
+        return TextoResponse(texto=await agent.resumir_dia(llm, req))
+    except LLMError as exc:
+        raise HTTPException(status_code=502, detail="falha no modelo") from exc
+
+
+@app.post("/v1/agenda", response_model=AgendaResponse, dependencies=[Depends(exigir_chave)])
+async def agenda(req: AgendaRequest, llm: LLMProvider = Depends(get_llm)) -> AgendaResponse:
+    try:
+        return await agent.montar_pauta(llm, req)
+    except (LLMError, agent.AgentError) as exc:
         raise HTTPException(status_code=502, detail="falha no modelo") from exc

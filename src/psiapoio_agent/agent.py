@@ -9,11 +9,14 @@ from pydantic import ValidationError
 from .provider import LLMError, LLMProvider
 from .schemas import (
     Classificacao,
+    AgendaRequest,
+    AgendaResponse,
     ContextoAcompanhamento,
     MemoryUpdateRequest,
     RespondRequest,
     RespondResponse,
     Resposta,
+    SummaryRequest,
 )
 
 MEMORIA_MAX_CHARS = 1500
@@ -159,3 +162,48 @@ async def atualizar_memoria(llm: LLMProvider, req: MemoryUpdateRequest) -> str:
         temperature=0.2,
     )
     return texto[:MEMORIA_MAX_CHARS]
+
+
+RESUMO_SISTEMA = """Você escreve o RESUMO DIÁRIO de um paciente para o psicólogo dele revisar. É uma anotação, não um laudo.
+Regras: 3 a 6 frases em português do Brasil, só com o que o paciente disse ou fez (humor informado, tarefas feitas ou não, temas que apareceram). Não interprete, não diagnostique, não sugira conduta, não invente. Se algo não aparece nas mensagens, não mencione.
+Responda APENAS o texto do resumo."""
+
+PAUTA_SISTEMA = """Você monta a PAUTA da próxima sessão de psicologia: assuntos que o paciente trouxe e que o psicólogo pode querer abordar.
+Use só os resumos e os temas recebidos. Não interprete nem diagnostique. Itens curtos e objetivos, no máximo 6. Não invente itens que não estejam nos resumos ou nos temas, e não proponha conduta.
+Responda APENAS um JSON: {"texto": "<uma frase de abertura>", "itens": ["<assunto>", ...]}"""
+
+
+async def resumir_dia(llm: LLMProvider, req: SummaryRequest) -> str:
+    conversa = "\n".join(f"{m.papel}: {m.texto}" for m in req.mensagens) or "(sem mensagens)"
+    tarefas = "\n".join(f"- {t.descricao}: {'feita' if t.feita else 'não marcada'}" for t in req.tarefas) or "(nenhuma)"
+    humores = ", ".join(str(h) for h in req.humores) or "(não informado)"
+    texto = await llm.chat(
+        [
+            {"role": "system", "content": RESUMO_SISTEMA},
+            {
+                "role": "user",
+                "content": f"Dia: {req.dia}\nHumor informado (1 a 5): {humores}\nTarefas:\n{tarefas}\n\nConversa:\n{conversa}",
+            },
+        ],
+        temperature=0.2,
+    )
+    return texto.strip()
+
+
+async def montar_pauta(llm: LLMProvider, req: AgendaRequest) -> AgendaResponse:
+    resumos = "\n".join(f"- {r}" for r in req.resumos) or "(nenhum)"
+    temas = "\n".join(f"- {t}" for t in req.temas_para_pauta) or "(nenhum)"
+    texto = await llm.chat(
+        [
+            {"role": "system", "content": PAUTA_SISTEMA},
+            {"role": "user", "content": f"Resumos desde a última sessão:\n{resumos}\n\nTemas que o paciente quis levar à sessão:\n{temas}"},
+        ],
+        json_mode=True,
+        temperature=0.2,
+    )
+    try:
+        dados = _extrair_json(texto)
+        itens = [str(i) for i in dados.get("itens", [])][:6]
+        return AgendaResponse(texto=str(dados.get("texto", "")), itens=itens)
+    except (AgentError, ValidationError) as exc:
+        raise AgentError("pauta fora do formato") from exc
